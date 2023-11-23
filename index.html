@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mouse Coordinates</title>
+</head>
+<body>
+  <form id="usernameForm">
+    <label for="username">Enter your name:</label>
+    <input type="text" id="username" />
+    <button type="submit">Submit</button>
+  </form>
+
+  <p id="coordinates">Coordinates: x: y:</p>
+  <canvas
+    id="myCanvas"
+    width="500"
+    height="500"
+    style="border: 1px solid #000000"
+  ></canvas>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    const coordinatesElement = document.getElementById("coordinates");
+    const canvas = document.getElementById("myCanvas");
+    const context = canvas.getContext("2d");
+    const usernameForm = document.getElementById("usernameForm");
+    const usernameInput = document.getElementById("username");
+
+    let username;
+    let userId;
+
+    usernameForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      setUsername();
+    });
+
+    function setUsername() {
+      username = usernameInput.value;
+      userId = socket.id; // Obtener el identificador único del socket
+      socket.emit("setUsername", { username, userId });
+      usernameForm.style.display = "none"; // Oculta el formulario después de establecer el nombre
+    }
+
+    canvas.addEventListener("mousemove", handleMouseMove);
+
+    function handleMouseMove(event) {
+      if (!username || !userId) {
+        return; // Evitar mover el cursor si el nombre de usuario o el identificador no están configurados
+      }
+
+      const x = event.clientX - canvas.offsetLeft;
+      const y = event.clientY - canvas.offsetTop;
+
+      // Enviar coordenadas, nombre de usuario y identificador al servidor
+      socket.emit("mousemove", { x, y, username, userId });
+    }
+
+    socket.on("mousemove", (users) => {
+      // Limpiar el canvas antes de redibujar
+      context.clearRect(0, 0, canvas.width, canvas.height);
+
+      users.forEach((user) => {
+        // Obtener un color único para cada usuario basado en su ID
+        const color = getColorById(user.userId);
+
+        // Dibujar un círculo con el nombre de usuario y fondo/borde
+        context.beginPath();
+        context.arc(user.x, user.y, 10, 0, 2 * Math.PI);
+        context.fillStyle = color;
+        context.fill();
+        context.stroke();
+
+        // Mostrar el nombre de usuario junto al cursor con fondo y borde
+        context.fillStyle = "white"; // Color de fondo
+        context.fillRect(user.x + 10, user.y - 22, context.measureText(user.username).width + 10, 20);
+        context.strokeStyle = "black"; // Color del borde
+        context.strokeRect(user.x + 10, user.y - 22, context.measureText(user.username).width + 10, 20);
+
+        context.fillStyle = "black";
+        context.font = "14px Arial";
+        context.fillText(user.username, user.x + 15, user.y - 8);
+      });
+    });
+
+    socket.on("userConnected", (message) => {
+      console.log(message);
+    });
+
+    socket.on("userDisconnected", (message) => {
+      console.log(message);
+    });
+
+    // Función para obtener un color único basado en el ID del usuario
+    function getColorById(userId) {
+      const hue = parseInt(userId.slice(-6), 16) % 360; // Convierte parte del ID en un número hexadecimal y obtén el módulo 360
+      return `hsl(${hue}, 70%, 50%)`; // Crea un color en el espacio de color HSL
+    }
+  </script>
+</body>
+</html>
